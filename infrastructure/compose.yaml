@@ -1,0 +1,135 @@
+name: powersports
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: powersports-mysql
+    restart: unless-stopped
+
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+    ports:
+      - "127.0.0.1:${MYSQL_LOCAL_PORT}:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - powersports-network
+
+  wordpress:
+    image: wordpress:php8.3-apache
+    container_name: powersports-wordpress
+    restart: unless-stopped
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    environment:
+      WORDPRESS_DB_HOST: mysql:3306
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_DEBUG: "1"
+
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_DEBUG_LOG', true);
+        define('WP_DEBUG_DISPLAY', false);
+        define('DISABLE_WP_CRON', true);
+
+    ports:
+      - "${WORDPRESS_PORT}:80"
+
+    volumes:
+      - wordpress_data:/var/www/html
+
+    networks:
+      - powersports-network
+
+  wordpress-cron:
+    image: busybox:stable
+    container_name: powersports-wordpress-cron
+    restart: unless-stopped
+
+    depends_on:
+      wordpress:
+        condition: service_started
+
+    command:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          if wget -q -O /dev/null http://wordpress/wp-cron.php; then
+            echo "WP-Cron OK"
+          else
+            echo "WP-Cron FAILED"
+          fi
+          sleep 60
+        done
+
+    networks:
+      - powersports-network
+
+  redis:
+    image: redis:8.2-alpine
+    container_name: powersports-redis
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:6379:6379"
+
+    volumes:
+      - redis_data:/data
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - powersports-network
+
+volumes:
+  mysql_data:
+    name: powersports-mysql-data
+
+  wordpress_data:
+    name: powersports-wordpress-data
+
+  redis_data:
+    name: powersports-redis-data
+
+networks:
+  powersports-network:
+    name: powersports-network
+    driver: bridge

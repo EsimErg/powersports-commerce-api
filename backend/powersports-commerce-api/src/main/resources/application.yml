@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: powersports-commerce-api
+
+  cache:
+    type: redis
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
+  session:
+    redis:
+      namespace: powersports:session
+      flush-mode: on_save
+
+server:
+  port: 8080
+
+  servlet:
+    session:
+      timeout: 7d
+
+      cookie:
+        name: POWERSPORTS_SESSION
+        path: /
+        http-only: true
+        same-site: ${SESSION_COOKIE_SAME_SITE:lax}
+        secure: ${SESSION_COOKIE_SECURE:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+
+  endpoint:
+    health:
+      show-details: always
+
+woocommerce:
+  base-url: http://localhost:8085
+  webhook-secret: ${WOOCOMMERCE_WEBHOOK_SECRET}
+  consumer-key: ${WOOCOMMERCE_CONSUMER_KEY}
+  consumer-secret: ${WOOCOMMERCE_CONSUMER_SECRET}
+
+app:
+  cors:
+    allowed-origin-patterns: ${FRONTEND_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000}
+
