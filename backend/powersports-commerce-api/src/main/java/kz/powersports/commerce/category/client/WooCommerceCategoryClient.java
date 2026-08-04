@@ -15,7 +15,7 @@ import java.util.List;
 public class WooCommerceCategoryClient {
 
     private static final String CATEGORIES_PATH =
-            "/wp-json/wc/store/v1/products/categoriess";
+            "/wp-json/wc/store/v1/products/categories";
 
     private final RestClient wooCommerceRestClient;
 
