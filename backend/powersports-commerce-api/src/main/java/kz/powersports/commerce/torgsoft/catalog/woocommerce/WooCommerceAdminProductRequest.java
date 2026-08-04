@@ -27,21 +27,40 @@ public record WooCommerceAdminProductRequest(
         @JsonProperty("stock_status")
         String stockStatus,
 
-        @JsonProperty("backorders")
         String backorders,
 
         @JsonProperty("meta_data")
         List<MetaData> metaData
 ) {
 
-    public static WooCommerceAdminProductRequest from(
+    public static WooCommerceAdminProductRequest forCreate(
             WooCommerceProductSyncRequest request,
             TorgsoftProperties.ProductStatus productStatus
     ) {
-        Objects.requireNonNull(request, "request не должен быть null");
         Objects.requireNonNull(
                 productStatus,
                 "productStatus не должен быть null"
+        );
+
+        return build(
+                request,
+                productStatus.apiValue()
+        );
+    }
+
+    public static WooCommerceAdminProductRequest forUpdate(
+            WooCommerceProductSyncRequest request
+    ) {
+        return build(request, null);
+    }
+
+    private static WooCommerceAdminProductRequest build(
+            WooCommerceProductSyncRequest request,
+            String status
+    ) {
+        Objects.requireNonNull(
+                request,
+                "request не должен быть null"
         );
 
         int stockQuantity = convertStockQuantity(
@@ -51,12 +70,16 @@ public record WooCommerceAdminProductRequest(
         return new WooCommerceAdminProductRequest(
                 request.name(),
                 "simple",
-                productStatus.apiValue(),
+                status,
                 request.sku(),
-                request.price().stripTrailingZeros().toPlainString(),
+                request.price()
+                        .stripTrailingZeros()
+                        .toPlainString(),
                 true,
                 stockQuantity,
-                stockQuantity > 0 ? "instock" : "outofstock",
+                stockQuantity > 0
+                        ? "instock"
+                        : "outofstock",
                 "no",
                 List.of(
                         new MetaData(
@@ -67,17 +90,20 @@ public record WooCommerceAdminProductRequest(
         );
     }
 
-    private static int convertStockQuantity(BigDecimal quantity) {
+    private static int convertStockQuantity(
+            BigDecimal quantity
+    ) {
         Objects.requireNonNull(
                 quantity,
                 "stockQuantity не должен быть null"
         );
 
-        BigDecimal nonNegativeQuantity =
+        BigDecimal normalizedQuantity =
                 quantity.max(BigDecimal.ZERO);
 
         try {
-            return nonNegativeQuantity.intValueExact();
+            return normalizedQuantity.intValueExact();
+
         } catch (ArithmeticException exception) {
             throw new IllegalArgumentException(
                     "Остаток WooCommerce должен быть целым числом: "

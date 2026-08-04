@@ -51,7 +51,7 @@ public class RestTorgsoftWooCommerceProductGateway
         );
 
         WooCommerceAdminProductRequest apiRequest =
-                WooCommerceAdminProductRequest.from(
+                WooCommerceAdminProductRequest.forCreate(
                         request,
                         properties.productStatus()
                 );
@@ -103,9 +103,8 @@ public class RestTorgsoftWooCommerceProductGateway
         );
 
         WooCommerceAdminProductRequest apiRequest =
-                WooCommerceAdminProductRequest.from(
-                        request,
-                        properties.productStatus()
+                WooCommerceAdminProductRequest.forUpdate(
+                        request
                 );
 
         try {

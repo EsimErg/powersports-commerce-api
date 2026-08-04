@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import java.util.Objects;
 import java.util.Optional;
+
 @Component
 @ConditionalOnProperty(
         prefix = "torgsoft",
