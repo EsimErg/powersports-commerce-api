@@ -60,13 +60,6 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Общие тестовые инструменты:
-     JUnit, Mockito, AssertJ -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
 
 		<!-- MockMvc, @WebMvcTest и MVC test auto-configuration -->
 		<dependency>

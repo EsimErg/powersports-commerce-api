@@ -52,3 +52,8 @@ app:
   cors:
     allowed-origin-patterns: ${FRONTEND_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000}
 
+torgsoft:
+  enabled: ${TORGSOFT_ENABLED:false}
+  exchange-directory: ${TORGSOFT_EXCHANGE_DIRECTORY:./data/torgsoft}
+  catalog-file-name: ${TORGSOFT_CATALOG_FILE_NAME:TSGoods.trs}
+  order-format: ${TORGSOFT_ORDER_FORMAT:JSON}
