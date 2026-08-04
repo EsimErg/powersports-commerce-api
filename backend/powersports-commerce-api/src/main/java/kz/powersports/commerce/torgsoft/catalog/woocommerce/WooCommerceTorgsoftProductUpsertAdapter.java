@@ -4,10 +4,16 @@ import kz.powersports.commerce.torgsoft.catalog.model.TorgsoftProduct;
 import kz.powersports.commerce.torgsoft.catalog.sync.ProductSyncAction;
 import kz.powersports.commerce.torgsoft.catalog.sync.TorgsoftProductUpsertPort;
 import kz.powersports.commerce.torgsoft.mapping.TorgsoftProductMappingRepository;
-
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
 import java.util.Objects;
 import java.util.Optional;
-
+@Component
+@ConditionalOnProperty(
+        prefix = "torgsoft",
+        name = "enabled",
+        havingValue = "true"
+)
 public final class WooCommerceTorgsoftProductUpsertAdapter
         implements TorgsoftProductUpsertPort {
 
