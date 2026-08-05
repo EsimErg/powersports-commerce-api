@@ -58,3 +58,6 @@ torgsoft:
   catalog-file-name: ${TORGSOFT_CATALOG_FILE_NAME:TSGoods.trs}
   order-format: ${TORGSOFT_ORDER_FORMAT:JSON}
   product-status: ${TORGSOFT_PRODUCT_STATUS:draft}
+
+  smoke-test:
+    enabled: ${TORGSOFT_SMOKE_TEST_ENABLED:false}
