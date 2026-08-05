@@ -69,6 +69,11 @@ torgsoft:
     enabled: ${TORGSOFT_MANUAL_IMPORT_ENABLED:false}
     token: ${TORGSOFT_MANUAL_IMPORT_TOKEN:}
 
+  scheduler:
+    enabled: ${TORGSOFT_SCHEDULER_ENABLED:false}
+    fixed-delay: ${TORGSOFT_SCHEDULER_FIXED_DELAY:PT15M}
+    initial-delay: ${TORGSOFT_SCHEDULER_INITIAL_DELAY:PT1M}
+
   catalog:
     charset: ${TORGSOFT_CATALOG_CHARSET:windows-1251}
     delimiter: "${TORGSOFT_CATALOG_DELIMITER:;}"

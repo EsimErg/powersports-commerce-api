@@ -8,7 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.Path;
-
+import kz.powersports.commerce.torgsoft.catalog.history.TorgsoftCatalogImportHistoryStore;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
@@ -30,7 +30,8 @@ class TorgsoftCatalogImportServiceTest {
         importService =
                 new TorgsoftCatalogImportService(
                         fileResolver,
-                        synchronizer
+                        synchronizer,
+                        historyStore
                 );
     }
 
@@ -100,4 +101,6 @@ class TorgsoftCatalogImportServiceTest {
                 secondResult
         );
     }
+    @Mock
+    private TorgsoftCatalogImportHistoryStore historyStore;
 }
