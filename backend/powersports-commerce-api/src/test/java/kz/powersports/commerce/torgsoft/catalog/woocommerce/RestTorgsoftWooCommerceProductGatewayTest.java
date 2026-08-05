@@ -11,7 +11,7 @@ import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.nio.file.Path;
-
+import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
@@ -213,5 +213,38 @@ class RestTorgsoftWooCommerceProductGatewayTest {
                 new BigDecimal("340000.00"),
                 new BigDecimal("5")
         );
+    }
+    @Test
+    void shouldFindExistingProductBySku() {
+        mockServer
+                .expect(
+                        requestTo(
+                                "http://woocommerce.test/wp-json/wc/v3/products"
+                                        + "?sku=PS-100&per_page=1"
+                        )
+                )
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(
+                        withSuccess(
+                                """
+                                [
+                                  {
+                                    "id": 77
+                                  }
+                                ]
+                                """,
+                                MediaType.APPLICATION_JSON
+                        )
+                );
+
+        Optional<Long> result =
+                gateway.findProductIdBySku("PS-100");
+
+        assertEquals(
+                Optional.of(77L),
+                result
+        );
+
+        mockServer.verify();
     }
 }

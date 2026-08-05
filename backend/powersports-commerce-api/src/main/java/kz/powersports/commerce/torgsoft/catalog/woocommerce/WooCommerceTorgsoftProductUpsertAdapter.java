@@ -46,14 +46,36 @@ public final class WooCommerceTorgsoftProductUpsertAdapter
         WooCommerceProductSyncRequest request =
                 WooCommerceProductSyncRequest.from(product);
 
-        Optional<Long> existingProductId =
+        Optional<Long> mappedProductId =
                 mappingRepository.findWooCommerceProductId(
                         product.goodId()
                 );
 
-        if (existingProductId.isPresent()) {
+        if (mappedProductId.isPresent()) {
             productGateway.update(
-                    existingProductId.get(),
+                    mappedProductId.get(),
+                    request
+            );
+
+            return ProductSyncAction.UPDATED;
+        }
+
+        Optional<Long> productIdBySku =
+                productGateway.findProductIdBySku(
+                        product.sku()
+                );
+
+        if (productIdBySku.isPresent()) {
+            Long existingProductId =
+                    productIdBySku.get();
+
+            mappingRepository.save(
+                    product.goodId(),
+                    existingProductId
+            );
+
+            productGateway.update(
+                    existingProductId,
                     request
             );
 

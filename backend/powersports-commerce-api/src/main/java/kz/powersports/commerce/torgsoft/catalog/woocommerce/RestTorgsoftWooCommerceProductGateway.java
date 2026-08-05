@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
+import java.util.Optional;
 import java.util.Objects;
 
 @Component
@@ -40,7 +40,55 @@ public class RestTorgsoftWooCommerceProductGateway
                 "properties не должен быть null"
         );
     }
+    @Override
+    public Optional<Long> findProductIdBySku(String sku) {
+        if (sku == null || sku.isBlank()) {
+            return Optional.empty();
+        }
 
+        String normalizedSku = sku.trim();
+
+        try {
+            WooCommerceAdminProductResponse[] response =
+                    wooCommerceAdminRestClient
+                            .get()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path(PRODUCTS_PATH)
+                                    .queryParam("sku", normalizedSku)
+                                    .queryParam("per_page", 1)
+                                    .build()
+                            )
+                            .retrieve()
+                            .body(
+                                    WooCommerceAdminProductResponse[].class
+                            );
+
+            if (response == null || response.length == 0) {
+                return Optional.empty();
+            }
+
+            WooCommerceAdminProductResponse product =
+                    response[0];
+
+            if (product == null
+                    || product.id() == null
+                    || product.id() <= 0) {
+                throw new IllegalStateException(
+                        "WooCommerce вернул товар без корректного ID. SKU: "
+                                + normalizedSku
+                );
+            }
+
+            return Optional.of(product.id());
+
+        } catch (RestClientException exception) {
+            throw new TorgsoftProductSyncException(
+                    "Не удалось найти товар WooCommerce по SKU: "
+                            + normalizedSku,
+                    exception
+            );
+        }
+    }
     @Override
     public WooCommerceProductSyncResult create(
             WooCommerceProductSyncRequest request

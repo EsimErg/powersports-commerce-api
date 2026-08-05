@@ -46,6 +46,10 @@ class WooCommerceTorgsoftProductUpsertAdapterTest {
         ).thenReturn(Optional.empty());
 
         when(
+                productGateway.findProductIdBySku("PS-100")
+        ).thenReturn(Optional.empty());
+
+        when(
                 productGateway.create(any())
         ).thenReturn(
                 new WooCommerceProductSyncResult(77L)
@@ -55,6 +59,7 @@ class WooCommerceTorgsoftProductUpsertAdapterTest {
 
         assertEquals(ProductSyncAction.CREATED, result);
 
+        verify(productGateway).findProductIdBySku("PS-100");
         verify(productGateway).create(any());
 
         verify(mappingRepository).save(
@@ -92,5 +97,37 @@ class WooCommerceTorgsoftProductUpsertAdapterTest {
                 new BigDecimal("340000.00"),
                 new BigDecimal("5")
         );
+    }
+    @Test
+    void shouldRestoreMappingAndUpdateWhenProductExistsBySku() {
+        TorgsoftProduct product = createProduct();
+
+        when(
+                mappingRepository.findWooCommerceProductId("GOOD-100")
+        ).thenReturn(Optional.empty());
+
+        when(
+                productGateway.findProductIdBySku("PS-100")
+        ).thenReturn(Optional.of(77L));
+
+        ProductSyncAction result =
+                adapter.upsert(product);
+
+        assertEquals(
+                ProductSyncAction.UPDATED,
+                result
+        );
+
+        verify(mappingRepository).save(
+                "GOOD-100",
+                77L
+        );
+
+        verify(productGateway).update(
+                77L,
+                WooCommerceProductSyncRequest.from(product)
+        );
+
+        verify(productGateway, never()).create(any());
     }
 }
