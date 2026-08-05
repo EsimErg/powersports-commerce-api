@@ -4,11 +4,18 @@ import kz.powersports.commerce.torgsoft.catalog.model.TorgsoftProduct;
 import kz.powersports.commerce.torgsoft.catalog.port.TorgsoftCatalogReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
+@Component
+@ConditionalOnProperty(
+        prefix = "torgsoft",
+        name = "enabled",
+        havingValue = "true"
+)
 public final class TorgsoftCatalogSynchronizer {
 
     private static final Logger log =

@@ -62,6 +62,9 @@ torgsoft:
   smoke-test:
     enabled: ${TORGSOFT_SMOKE_TEST_ENABLED:false}
 
+  import-on-startup:
+    enabled: ${TORGSOFT_IMPORT_ON_STARTUP_ENABLED:false}
+
   catalog:
     charset: ${TORGSOFT_CATALOG_CHARSET:windows-1251}
     delimiter: "${TORGSOFT_CATALOG_DELIMITER:;}"
