@@ -20,14 +20,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.regex.Pattern;
 import kz.powersports.commerce.common.exception.OrderNotFoundException;
 import kz.powersports.commerce.order.dto.OrderStatusResponse;
+import kz.powersports.commerce.torgsoft.order.export.TorgsoftOrderExportQueueService;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.List;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Service
 public class OrderService {
@@ -103,14 +105,21 @@ public class OrderService {
     private final WooCommerceOrderClient orderClient;
     private final OrderIdempotencyService idempotencyService;
 
+    private final Optional<TorgsoftOrderExportQueueService>
+            torgsoftOrderExportQueueService;
+
     public OrderService(
             CartService cartService,
             WooCommerceOrderClient orderClient,
-            OrderIdempotencyService idempotencyService
+            OrderIdempotencyService idempotencyService,
+            Optional<TorgsoftOrderExportQueueService>
+                    torgsoftOrderExportQueueService
     ) {
         this.cartService = cartService;
         this.orderClient = orderClient;
         this.idempotencyService = idempotencyService;
+        this.torgsoftOrderExportQueueService =
+                torgsoftOrderExportQueueService;
     }
 
     public OrderResponse createOrder(
@@ -306,7 +315,10 @@ public class OrderService {
                         exception
                 );
             }
-
+            enqueueTorgsoftExportSafely(
+                    response.id(),
+                    response.number()
+            );
             return response;
 
         } catch (RuntimeException exception) {
@@ -458,6 +470,7 @@ public class OrderService {
                     exception
             );
         }
+
     }
 
     private String buildOrderAccessSessionKey(
@@ -484,6 +497,36 @@ public class OrderService {
         return MessageDigest.isEqual(
                 expectedBytes,
                 actualBytes
+        );
+    }
+    private void enqueueTorgsoftExportSafely(
+            Long orderId,
+            String orderNumber
+    ) {
+        torgsoftOrderExportQueueService.ifPresent(
+                queueService -> {
+                    try {
+                        queueService.enqueue(
+                                orderId,
+                                orderNumber
+                        );
+
+                    } catch (RuntimeException exception) {
+                        /*
+                         * Заказ WooCommerce уже создан.
+                         * Ошибка Redis/Torgsoft не должна отменять
+                         * оформление заказа покупателя.
+                         */
+                        log.error(
+                                "Заказ создан, но не поставлен "
+                                        + "в очередь экспорта Torgsoft. "
+                                        + "Order ID: {}, номер: {}",
+                                orderId,
+                                orderNumber,
+                                exception
+                        );
+                    }
+                }
         );
     }
 }

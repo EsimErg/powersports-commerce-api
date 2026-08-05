@@ -22,6 +22,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import kz.powersports.commerce.torgsoft.order.export.TorgsoftOrderExportQueueService;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -56,6 +58,10 @@ class OrderServiceTest {
     private WooCommerceOrderClient orderClient;
 
     @Mock
+    private TorgsoftOrderExportQueueService
+            torgsoftOrderExportQueueService;
+
+    @Mock
     private OrderIdempotencyService idempotencyService;
 
     @Mock
@@ -65,12 +71,12 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        orderService =
-                new OrderService(
-                        cartService,
-                        orderClient,
-                        idempotencyService
-                );
+        orderService = new OrderService(
+                cartService,
+                orderClient,
+                idempotencyService,
+                Optional.of(torgsoftOrderExportQueueService)
+        );
     }
 
     @Test
@@ -214,6 +220,11 @@ class OrderServiceTest {
 
         verify(cartService)
                 .detachCart(session);
+
+        verify(torgsoftOrderExportQueueService).enqueue(
+                ORDER_ID,
+                "15"
+        );
     }
 
     @Test
