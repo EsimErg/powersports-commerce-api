@@ -4,6 +4,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(TorgsoftProperties.class)
+@EnableConfigurationProperties({
+        TorgsoftProperties.class,
+        TorgsoftCatalogFormatProperties.class
+})
 public class TorgsoftConfiguration {
 }

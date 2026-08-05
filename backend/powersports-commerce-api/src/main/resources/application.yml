@@ -61,3 +61,13 @@ torgsoft:
 
   smoke-test:
     enabled: ${TORGSOFT_SMOKE_TEST_ENABLED:false}
+
+  catalog:
+    charset: ${TORGSOFT_CATALOG_CHARSET:windows-1251}
+    delimiter: "${TORGSOFT_CATALOG_DELIMITER:;}"
+    columns:
+      good-id: ${TORGSOFT_COLUMN_GOOD_ID:GoodID}
+      sku: ${TORGSOFT_COLUMN_SKU:Articul}
+      name: ${TORGSOFT_COLUMN_NAME:Name}
+      price: ${TORGSOFT_COLUMN_PRICE:Price}
+      stock: ${TORGSOFT_COLUMN_STOCK:Quantity}
