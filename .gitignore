@@ -24,3 +24,4 @@ docker-data/
 # Temporary files
 *.tmp
 *.swp
+backend/powersports-commerce-api/data/torgsoft/orders/outgoing/*.json
