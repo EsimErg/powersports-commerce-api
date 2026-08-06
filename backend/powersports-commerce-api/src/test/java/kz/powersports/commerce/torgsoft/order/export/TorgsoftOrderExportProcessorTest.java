@@ -13,7 +13,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,11 +27,17 @@ class TorgsoftOrderExportProcessorTest {
     private static final Instant NOW =
             Instant.parse("2026-08-05T09:00:00Z");
 
+    private static final Duration RETRY_DELAY =
+            Duration.ofMinutes(5);
+
     @Mock
     private TorgsoftOrderExportJobRepository repository;
 
     @Mock
     private TorgsoftOrderExporter exporter;
+
+    @Mock
+    private TorgsoftOrderExportStatusGateway statusGateway;
 
     private TorgsoftOrderExportProcessor processor;
 
@@ -37,8 +47,9 @@ class TorgsoftOrderExportProcessorTest {
                 new TorgsoftOrderExportProcessor(
                         repository,
                         exporter,
+                        statusGateway,
                         3,
-                        Duration.ofMinutes(5)
+                        RETRY_DELAY
                 );
     }
 
@@ -51,16 +62,7 @@ class TorgsoftOrderExportProcessorTest {
                         NOW
                 );
 
-        when(
-                repository.findDueOrderIds(
-                        NOW,
-                        10
-                )
-        ).thenReturn(List.of(15L));
-
-        when(
-                repository.findByOrderId(15L)
-        ).thenReturn(Optional.of(job));
+        prepareDueJob(job);
 
         int processed =
                 processor.processDueJobs(
@@ -71,6 +73,13 @@ class TorgsoftOrderExportProcessorTest {
         assertThat(processed).isEqualTo(1);
 
         verify(exporter).export(15L);
+
+        verify(statusGateway).markExported(
+                15L,
+                1,
+                NOW
+        );
+
         verify(repository).removeFromPending(15L);
 
         ArgumentCaptor<TorgsoftOrderExportJob> captor =
@@ -78,9 +87,8 @@ class TorgsoftOrderExportProcessorTest {
                         TorgsoftOrderExportJob.class
                 );
 
-        verify(repository,
-                org.mockito.Mockito.times(2)
-        ).update(captor.capture());
+        verify(repository, times(2))
+                .update(captor.capture());
 
         TorgsoftOrderExportJob exportedJob =
                 captor.getAllValues().get(1);
@@ -92,6 +100,9 @@ class TorgsoftOrderExportProcessorTest {
 
         assertThat(exportedJob.attempts())
                 .isEqualTo(1);
+
+        assertThat(exportedJob.lastError())
+                .isNull();
     }
 
     @Test
@@ -103,19 +114,12 @@ class TorgsoftOrderExportProcessorTest {
                         NOW
                 );
 
-        when(
-                repository.findDueOrderIds(
-                        NOW,
-                        10
-                )
-        ).thenReturn(List.of(15L));
-
-        when(
-                repository.findByOrderId(15L)
-        ).thenReturn(Optional.of(job));
+        prepareDueJob(job);
 
         doThrow(
-                new RuntimeException("Torgsoft недоступен")
+                new RuntimeException(
+                        "Torgsoft недоступен"
+                )
         ).when(exporter).export(15L);
 
         processor.processDueJobs(
@@ -123,9 +127,19 @@ class TorgsoftOrderExportProcessorTest {
                 10
         );
 
+        Instant nextAttemptAt =
+                NOW.plus(RETRY_DELAY);
+
         verify(repository).schedule(
                 15L,
-                NOW.plus(Duration.ofMinutes(5))
+                nextAttemptAt
+        );
+
+        verify(statusGateway).markRetry(
+                15L,
+                1,
+                nextAttemptAt,
+                "Torgsoft недоступен"
         );
 
         ArgumentCaptor<TorgsoftOrderExportJob> captor =
@@ -133,9 +147,8 @@ class TorgsoftOrderExportProcessorTest {
                         TorgsoftOrderExportJob.class
                 );
 
-        verify(repository,
-                org.mockito.Mockito.times(2)
-        ).update(captor.capture());
+        verify(repository, times(2))
+                .update(captor.capture());
 
         TorgsoftOrderExportJob retryJob =
                 captor.getAllValues().get(1);
@@ -148,7 +161,156 @@ class TorgsoftOrderExportProcessorTest {
         assertThat(retryJob.attempts())
                 .isEqualTo(1);
 
+        assertThat(retryJob.nextAttemptAt())
+                .isEqualTo(nextAttemptAt);
+
         assertThat(retryJob.lastError())
-                .isEqualTo("Torgsoft недоступен");
+                .isEqualTo(
+                        "Torgsoft недоступен"
+                );
+    }
+
+    @Test
+    void shouldMarkOrderAsFailedAfterLastAttempt() {
+        TorgsoftOrderExportJob job =
+                new TorgsoftOrderExportJob(
+                        15L,
+                        "15",
+                        NOW,
+                        NOW,
+                        2,
+                        TorgsoftOrderExportStatus.PENDING,
+                        "Предыдущая ошибка"
+                );
+
+        prepareDueJob(job);
+
+        doThrow(
+                new RuntimeException(
+                        "Torgsoft недоступен"
+                )
+        ).when(exporter).export(15L);
+
+        processor.processDueJobs(
+                NOW,
+                10
+        );
+
+        verify(statusGateway).markFailed(
+                15L,
+                3,
+                "Torgsoft недоступен"
+        );
+
+        verify(
+                repository,
+                never()
+        ).schedule(
+                anyLong(),
+                any()
+        );
+
+        ArgumentCaptor<TorgsoftOrderExportJob> captor =
+                ArgumentCaptor.forClass(
+                        TorgsoftOrderExportJob.class
+                );
+
+        verify(repository, times(2))
+                .update(captor.capture());
+
+        TorgsoftOrderExportJob failedJob =
+                captor.getAllValues().get(1);
+
+        assertThat(failedJob.status())
+                .isEqualTo(
+                        TorgsoftOrderExportStatus.FAILED
+                );
+
+        assertThat(failedJob.attempts())
+                .isEqualTo(3);
+
+        assertThat(failedJob.lastError())
+                .isEqualTo(
+                        "Torgsoft недоступен"
+                );
+    }
+
+    @Test
+    void metadataFailureShouldNotRepeatSuccessfulExport() {
+        TorgsoftOrderExportJob job =
+                TorgsoftOrderExportJob.pending(
+                        15L,
+                        "15",
+                        NOW
+                );
+
+        prepareDueJob(job);
+
+        doThrow(
+                new RuntimeException(
+                        "WooCommerce недоступен"
+                )
+        ).when(statusGateway).markExported(
+                15L,
+                1,
+                NOW
+        );
+
+        int processed =
+                processor.processDueJobs(
+                        NOW,
+                        10
+                );
+
+        assertThat(processed).isEqualTo(1);
+
+        verify(exporter).export(15L);
+
+        verify(
+                repository,
+                never()
+        ).schedule(
+                anyLong(),
+                any()
+        );
+
+        ArgumentCaptor<TorgsoftOrderExportJob> captor =
+                ArgumentCaptor.forClass(
+                        TorgsoftOrderExportJob.class
+                );
+
+        verify(repository, times(2))
+                .update(captor.capture());
+
+        TorgsoftOrderExportJob exportedJob =
+                captor.getAllValues().get(1);
+
+        assertThat(exportedJob.status())
+                .isEqualTo(
+                        TorgsoftOrderExportStatus.EXPORTED
+                );
+    }
+
+    private void prepareDueJob(
+            TorgsoftOrderExportJob job
+    ) {
+        when(
+                repository.findDueOrderIds(
+                        NOW,
+                        10
+                )
+        ).thenReturn(
+                List.of(
+                        job.wooCommerceOrderId()
+                )
+        );
+
+        when(
+                repository.findByOrderId(
+                        job.wooCommerceOrderId()
+                )
+        ).thenReturn(
+                Optional.of(job)
+        );
     }
 }

@@ -7,6 +7,8 @@ import kz.powersports.commerce.torgsoft.order.export
 import kz.powersports.commerce.torgsoft.order.export
         .TorgsoftOrderExportScheduler;
 import kz.powersports.commerce.torgsoft.order.export
+        .TorgsoftOrderExportStatusGateway;
+import kz.powersports.commerce.torgsoft.order.export
         .TorgsoftOrderExporter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition
@@ -32,6 +34,7 @@ public class TorgsoftOrderExportConfiguration {
     torgsoftOrderExportProcessor(
             TorgsoftOrderExportJobRepository repository,
             TorgsoftOrderExporter exporter,
+            TorgsoftOrderExportStatusGateway statusGateway,
 
             @Value(
                     "${torgsoft.order-export.worker.max-attempts:5}"
@@ -46,6 +49,7 @@ public class TorgsoftOrderExportConfiguration {
         return new TorgsoftOrderExportProcessor(
                 repository,
                 exporter,
+                statusGateway,
                 maxAttempts,
                 retryDelay
         );

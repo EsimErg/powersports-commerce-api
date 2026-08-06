@@ -17,12 +17,17 @@ public final class TorgsoftOrderExportProcessor {
 
     private final TorgsoftOrderExportJobRepository repository;
     private final TorgsoftOrderExporter exporter;
+
+    private final TorgsoftOrderExportStatusGateway
+            statusGateway;
+
     private final int maxAttempts;
     private final Duration retryDelay;
 
     public TorgsoftOrderExportProcessor(
             TorgsoftOrderExportJobRepository repository,
             TorgsoftOrderExporter exporter,
+            TorgsoftOrderExportStatusGateway statusGateway,
             int maxAttempts,
             Duration retryDelay
     ) {
@@ -34,6 +39,11 @@ public final class TorgsoftOrderExportProcessor {
         this.exporter = Objects.requireNonNull(
                 exporter,
                 "exporter не должен быть null"
+        );
+
+        this.statusGateway = Objects.requireNonNull(
+                statusGateway,
+                "statusGateway не должен быть null"
         );
 
         if (maxAttempts < 1) {
@@ -65,6 +75,12 @@ public final class TorgsoftOrderExportProcessor {
                 "now не должен быть null"
         );
 
+        if (limit < 1) {
+            throw new IllegalArgumentException(
+                    "limit должен быть не меньше 1"
+            );
+        }
+
         List<Long> dueOrderIds =
                 repository.findDueOrderIds(
                         now,
@@ -74,7 +90,11 @@ public final class TorgsoftOrderExportProcessor {
         int processed = 0;
 
         for (Long orderId : dueOrderIds) {
-            processOrder(orderId, now);
+            processOrder(
+                    orderId,
+                    now
+            );
+
             processed++;
         }
 
@@ -92,7 +112,8 @@ public final class TorgsoftOrderExportProcessor {
 
         if (currentJob == null) {
             log.warn(
-                    "В очереди Torgsoft найден Order ID без задания: {}",
+                    "В очереди Torgsoft найден "
+                            + "Order ID без задания: {}",
                     orderId
             );
 
@@ -102,6 +123,7 @@ public final class TorgsoftOrderExportProcessor {
 
         if (currentJob.status()
                 == TorgsoftOrderExportStatus.EXPORTED) {
+
             repository.removeFromPending(orderId);
             return;
         }
@@ -123,28 +145,14 @@ public final class TorgsoftOrderExportProcessor {
         repository.update(processingJob);
         repository.removeFromPending(orderId);
 
+        /*
+         * В этом try находится только реальный экспорт.
+         *
+         * Обновление metadata WooCommerce выполняется позже
+         * и не должно попадать в обработку ошибки экспорта.
+         */
         try {
             exporter.export(orderId);
-
-            TorgsoftOrderExportJob exportedJob =
-                    new TorgsoftOrderExportJob(
-                            processingJob.wooCommerceOrderId(),
-                            processingJob.orderNumber(),
-                            processingJob.createdAt(),
-                            now,
-                            processingJob.attempts(),
-                            TorgsoftOrderExportStatus.EXPORTED,
-                            null
-                    );
-
-            repository.update(exportedJob);
-
-            log.info(
-                    "Заказ экспортирован в Torgsoft. "
-                            + "Order ID: {}, попытка: {}",
-                    orderId,
-                    currentAttempt
-            );
 
         } catch (RuntimeException exception) {
             handleFailure(
@@ -152,7 +160,43 @@ public final class TorgsoftOrderExportProcessor {
                     now,
                     exception
             );
+
+            return;
         }
+
+        TorgsoftOrderExportJob exportedJob =
+                new TorgsoftOrderExportJob(
+                        processingJob.wooCommerceOrderId(),
+                        processingJob.orderNumber(),
+                        processingJob.createdAt(),
+                        now,
+                        processingJob.attempts(),
+                        TorgsoftOrderExportStatus.EXPORTED,
+                        null
+                );
+
+        /*
+         * Сначала фиксируем успешный экспорт в Redis.
+         */
+        repository.update(exportedJob);
+
+        /*
+         * Затем пытаемся обновить metadata WooCommerce.
+         *
+         * Ошибка этого запроса не запускает повторный
+         * экспорт уже созданного файла.
+         */
+        markExportedSafely(
+                exportedJob,
+                now
+        );
+
+        log.info(
+                "Заказ экспортирован в Torgsoft. "
+                        + "Order ID: {}, попытка: {}",
+                orderId,
+                currentAttempt
+        );
     }
 
     private void handleFailure(
@@ -164,30 +208,61 @@ public final class TorgsoftOrderExportProcessor {
                 safeErrorMessage(exception);
 
         if (processingJob.attempts() >= maxAttempts) {
-            TorgsoftOrderExportJob failedJob =
-                    new TorgsoftOrderExportJob(
-                            processingJob.wooCommerceOrderId(),
-                            processingJob.orderNumber(),
-                            processingJob.createdAt(),
-                            now,
-                            processingJob.attempts(),
-                            TorgsoftOrderExportStatus.FAILED,
-                            errorMessage
-                    );
-
-            repository.update(failedJob);
-
-            log.error(
-                    "Заказ не удалось экспортировать в Torgsoft "
-                            + "после {} попыток. Order ID: {}",
-                    processingJob.attempts(),
-                    processingJob.wooCommerceOrderId(),
+            markAsFailed(
+                    processingJob,
+                    now,
+                    errorMessage,
                     exception
             );
 
             return;
         }
 
+        scheduleRetry(
+                processingJob,
+                now,
+                errorMessage
+        );
+    }
+
+    private void markAsFailed(
+            TorgsoftOrderExportJob processingJob,
+            Instant now,
+            String errorMessage,
+            RuntimeException exception
+    ) {
+        TorgsoftOrderExportJob failedJob =
+                new TorgsoftOrderExportJob(
+                        processingJob.wooCommerceOrderId(),
+                        processingJob.orderNumber(),
+                        processingJob.createdAt(),
+                        now,
+                        processingJob.attempts(),
+                        TorgsoftOrderExportStatus.FAILED,
+                        errorMessage
+                );
+
+        repository.update(failedJob);
+
+        markFailedSafely(
+                failedJob
+        );
+
+        log.error(
+                "Заказ не удалось экспортировать "
+                        + "в Torgsoft после {} попыток. "
+                        + "Order ID: {}",
+                processingJob.attempts(),
+                processingJob.wooCommerceOrderId(),
+                exception
+        );
+    }
+
+    private void scheduleRetry(
+            TorgsoftOrderExportJob processingJob,
+            Instant now,
+            String errorMessage
+    ) {
         Instant nextAttemptAt =
                 now.plus(retryDelay);
 
@@ -209,6 +284,10 @@ public final class TorgsoftOrderExportProcessor {
                 retryJob.nextAttemptAt()
         );
 
+        markRetrySafely(
+                retryJob
+        );
+
         log.warn(
                 "Экспорт заказа Torgsoft завершился ошибкой. "
                         + "Order ID: {}, попытка: {}, "
@@ -217,6 +296,71 @@ public final class TorgsoftOrderExportProcessor {
                 processingJob.attempts(),
                 nextAttemptAt
         );
+    }
+
+    private void markExportedSafely(
+            TorgsoftOrderExportJob exportedJob,
+            Instant exportedAt
+    ) {
+        try {
+            statusGateway.markExported(
+                    exportedJob.wooCommerceOrderId(),
+                    exportedJob.attempts(),
+                    exportedAt
+            );
+
+        } catch (RuntimeException exception) {
+            log.error(
+                    "Файл заказа успешно экспортирован, "
+                            + "но metadata WooCommerce "
+                            + "не обновлены. Order ID: {}",
+                    exportedJob.wooCommerceOrderId(),
+                    exception
+            );
+        }
+    }
+
+    private void markRetrySafely(
+            TorgsoftOrderExportJob retryJob
+    ) {
+        try {
+            statusGateway.markRetry(
+                    retryJob.wooCommerceOrderId(),
+                    retryJob.attempts(),
+                    retryJob.nextAttemptAt(),
+                    retryJob.lastError()
+            );
+
+        } catch (RuntimeException exception) {
+            log.error(
+                    "Повтор экспорта запланирован в Redis, "
+                            + "но metadata WooCommerce "
+                            + "не обновлены. Order ID: {}",
+                    retryJob.wooCommerceOrderId(),
+                    exception
+            );
+        }
+    }
+
+    private void markFailedSafely(
+            TorgsoftOrderExportJob failedJob
+    ) {
+        try {
+            statusGateway.markFailed(
+                    failedJob.wooCommerceOrderId(),
+                    failedJob.attempts(),
+                    failedJob.lastError()
+            );
+
+        } catch (RuntimeException exception) {
+            log.error(
+                    "Статус FAILED сохранён в Redis, "
+                            + "но metadata WooCommerce "
+                            + "не обновлены. Order ID: {}",
+                    failedJob.wooCommerceOrderId(),
+                    exception
+            );
+        }
     }
 
     private String safeErrorMessage(
@@ -230,8 +374,14 @@ public final class TorgsoftOrderExportProcessor {
                     .getSimpleName();
         }
 
-        return message.length() > 500
-                ? message.substring(0, 500)
-                : message;
+        String sanitized = message
+                .replace('\r', ' ')
+                .replace('\n', ' ')
+                .replace('\t', ' ')
+                .trim();
+
+        return sanitized.length() > 500
+                ? sanitized.substring(0, 500)
+                : sanitized;
     }
 }
