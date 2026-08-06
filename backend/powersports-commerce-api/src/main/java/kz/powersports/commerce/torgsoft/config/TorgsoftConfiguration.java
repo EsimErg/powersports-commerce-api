@@ -7,7 +7,8 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
         TorgsoftProperties.class,
         TorgsoftCatalogFormatProperties.class,
-        TorgsoftManualImportProperties.class
+        TorgsoftManualImportProperties.class,
+        TorgsoftOrderExportProperties.class
 })
 public class TorgsoftConfiguration {
 }

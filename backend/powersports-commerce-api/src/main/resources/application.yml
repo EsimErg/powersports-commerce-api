@@ -74,6 +74,18 @@ torgsoft:
     fixed-delay: ${TORGSOFT_SCHEDULER_FIXED_DELAY:PT15M}
     initial-delay: ${TORGSOFT_SCHEDULER_INITIAL_DELAY:PT1M}
 
+  order-export:
+    enabled: ${TORGSOFT_ORDER_EXPORT_ENABLED:false}
+    outgoing-directory: ${TORGSOFT_ORDER_EXPORT_DIRECTORY:orders/outgoing}
+    file-prefix: ${TORGSOFT_ORDER_FILE_PREFIX:order-}
+
+  worker:
+    batch-size: ${TORGSOFT_ORDER_EXPORT_BATCH_SIZE:20}
+    max-attempts: ${TORGSOFT_ORDER_EXPORT_MAX_ATTEMPTS:5}
+    retry-delay: ${TORGSOFT_ORDER_EXPORT_RETRY_DELAY:PT5M}
+    fixed-delay: ${TORGSOFT_ORDER_EXPORT_FIXED_DELAY:PT30S}
+    initial-delay: ${TORGSOFT_ORDER_EXPORT_INITIAL_DELAY:PT10S}
+
   catalog:
     charset: ${TORGSOFT_CATALOG_CHARSET:windows-1251}
     delimiter: "${TORGSOFT_CATALOG_DELIMITER:;}"
