@@ -28,7 +28,7 @@ public class CacheConfig {
             "productBySlug";
 
     public static final String CATEGORIES_CACHE =
-            "categories";
+            "categoriesV2";
 
     @Bean
     public RedisCacheManager cacheManager(
