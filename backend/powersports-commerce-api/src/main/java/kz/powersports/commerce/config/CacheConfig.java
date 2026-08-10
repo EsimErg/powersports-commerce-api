@@ -1,15 +1,20 @@
 package kz.powersports.commerce.config;
 
+import kz.powersports.commerce.category.dto.CategoryResponse;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.RedisSerializer;
+import tools.jackson.databind.JavaType;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -29,8 +34,9 @@ public class CacheConfig {
     public RedisCacheManager cacheManager(
             RedisConnectionFactory connectionFactory
     ) {
+
         RedisSerializationContext.SerializationPair<Object>
-                jsonSerializer =
+                defaultJsonSerializer =
                 RedisSerializationContext
                         .SerializationPair
                         .fromSerializer(
@@ -41,31 +47,69 @@ public class CacheConfig {
                 RedisCacheConfiguration
                         .defaultCacheConfig()
                         .disableCachingNullValues()
-                        .serializeValuesWith(jsonSerializer)
-                        .entryTtl(Duration.ofMinutes(5));
+                        .serializeValuesWith(
+                                defaultJsonSerializer
+                        )
+                        .entryTtl(
+                                Duration.ofMinutes(5)
+                        );
+
+        JsonMapper jsonMapper =
+                JsonMapper.builder()
+                        .build();
+
+        JavaType categoriesType =
+                jsonMapper
+                        .getTypeFactory()
+                        .constructCollectionType(
+                                List.class,
+                                CategoryResponse.class
+                        );
+
+        JacksonJsonRedisSerializer<List<CategoryResponse>>
+                categoriesSerializer =
+                new JacksonJsonRedisSerializer<>(
+                        jsonMapper,
+                        categoriesType
+                );
+
+        RedisSerializationContext.SerializationPair<
+                List<CategoryResponse>>
+                categoriesSerializationPair =
+                RedisSerializationContext
+                        .SerializationPair
+                        .fromSerializer(
+                                categoriesSerializer
+                        );
+
+        RedisCacheConfiguration
+                categoriesConfiguration =
+                defaultConfiguration
+                        .serializeValuesWith(
+                                categoriesSerializationPair
+                        )
+                        .entryTtl(
+                                Duration.ofMinutes(30)
+                        );
 
         Map<String, RedisCacheConfiguration>
                 cacheConfigurations =
                 Map.of(
                         PRODUCTS_CACHE,
-                        defaultConfiguration.entryTtl(
-                                Duration.ofMinutes(5)
-                        ),
+                        defaultConfiguration,
 
                         PRODUCT_BY_SLUG_CACHE,
-                        defaultConfiguration.entryTtl(
-                                Duration.ofMinutes(5)
-                        ),
+                        defaultConfiguration,
 
                         CATEGORIES_CACHE,
-                        defaultConfiguration.entryTtl(
-                                Duration.ofMinutes(30)
-                        )
+                        categoriesConfiguration
                 );
 
         return RedisCacheManager
                 .builder(connectionFactory)
-                .cacheDefaults(defaultConfiguration)
+                .cacheDefaults(
+                        defaultConfiguration
+                )
                 .withInitialCacheConfigurations(
                         cacheConfigurations
                 )
